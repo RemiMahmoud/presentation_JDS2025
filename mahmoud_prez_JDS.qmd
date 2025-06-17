@@ -770,7 +770,7 @@ $Y$ is a time serie of a climate variable (ex. water excess) and $x_1 = \mathbb{
 ## Perspectives and conclusion
 
 
-Development version available on [Github/RemiMahmoud/TrustMe](https://github.com/RemiMahmoud)
+Development version available on [Github/RemiMahmoud/localFaov](https://github.com/RemiMahmoud)
 
 ```{r, echo = TRUE, eval = FALSE}
 devtools::install_github("RemiMahmoud/localFaov")
