@@ -1,0 +1,983 @@
+---
+title: "Signal identification by local functional ANOVA"
+author: "Rémi Mahmoud"
+date: today
+title-block-style: "default"
+subtitle: |
+  remi.mahmoud@institut-agro.fr <br>
+  JDS 2025 <br>
+  Joint work with D. Causeur
+format:
+   revealjs:
+    transition: slide
+    theme: serif
+    slide-number: c/t
+    fontsize: 120%
+    toc: false
+    toc-depth: 1
+    page-layout: full
+    embed-resources: true
+    css: styles.css
+    pointer:
+      pointerSize: 16
+editor: source
+filters:
+  - parse-latex
+  - collapse-callout
+execute:
+  freeze: auto
+  error: true
+
+collapse-callout:
+  tip: true
+  note: true
+  warning: false
+  caution: true
+  important: false
+revealjs-plugins:
+  - pointer
+---
+
+
+
+# Introduction {visibility="uncounted"}
+
+
+## What today's talk is about
+
+::: {.incremental .incremental_space}
+
+1. Context  
+
+2. Functional ANOVA (fANOVA)  
+
+3. Local fANOVA  
+
+4. Simulation study  
+
+5. Application to real-world data  
+
+6. Discussion and perspectives  
+
+:::
+
+
+# Functional ANOVA {visibility="uncounted"}
+
+
+
+## Functional linear model  
+
+
+* A key question in statistic...
+
+
+. . .
+
+
+* Does X has an effect on Y / Is X linked to Y ?
+
+. . .
+
+* Swiss Army knife of statistic $\Rightarrow$ Linear Model
+
+
+
+<!-- * (Almost) same formulation in the functional context -->
+
+. . .
+
+__The functional linear model__:
+
+* $(Y(t))_{t \in {\cal T}}$ functional response variable defined on a time domain ${\cal T}$
+* $x=(x_{1},\ldots,x_{p})'$ stand for a $p$-vector of time-independent explanatory variables.
+
+
+\forall $t \in {\cal T}$, the following model is assumed:
+
+\begin{eqnarray}
+Y ( t ) & = & \beta_{0} ( t ) + \beta_{1} (t) x_{1} + \ldots + \beta_{p} ( t ) x_{p} + \varepsilon ( t ) ,    \label{fANOVAmod}
+\end{eqnarray}
+
+
+. . .
+
+where:
+
+* $\beta_{0}(t)$ pointwise intercept parameter at time $t$
+* $\beta(t)=(\beta_{1}(t),\ldots,\beta_{p}(t))'$ $p$-vector of pointwise regression parameters at time $t$. 
+* $\varepsilon(t) \sim \cal N(0,\sigma^2(t))$ & $\rho(t,t') = cor(\varepsilon(t),\varepsilon(t'))$ (potential time dependance)
+
+
+
+
+
+<!-- TODO: add graph example -->
+
+## Framework for today's presentation
+
+* One-way design with a two-group covariate
+* Could be applied to more complicated frameworks
+
+
+
+. . .
+
+::: .columns
+
+
+
+::: {.column width="50%"}
+
+![](images/plot_ERP_with_smooth.png){fig-align="center" height="350"}
+
+:::
+
+::: {.column width="50%"}
+
+![](images/plot_dataset.png){fig-align="center" height="350"}
+
+:::
+
+:::
+
+
+
+
+## What we want to test
+
+* Is the mean function the same for each group ?
+
+. . .
+
+
+
+* Pointwise null hypothesis: $H_{0t}: \beta(t) = 0, \  \forall t \in \cal T$
+
+
+* Global null hypothesis: $H_0 = \{H_{0t}, \  t \in \cal T \}$
+
+
+. . .
+
+
+__A decomposition to take time dependance into account__
+
+
+A proposal made by Sheu et al. 2016 [^4] and used in Causeur et al. 2020 [^5]
+
+. . .
+
+
+* *Idea*: Decorrelate pointwise test statistics and sum them across a given number of factor
+* How: decompose the time-correlation matrix R into a q-factor model $\Sigma = \Lambda \Lambda' + \Psi$
+    +  $\Psi$ diagonal $T \times T$ matrix 
+    +  $\Lambda \text{ is a } T \times q$ matrix containg factor loadings (among of "shared variance")
+ 
+* Greater power 
+ 
+
+
+
+
+[^4]: Sheu, C. F., Perthame, É., Lee, Y. S., & Causeur, D. (2016). Accounting for time dependence in large-scale multiple testing of event-related potential data. https://doi.org/10.1214/15-AOAS888
+
+[^5]: David Causeur, Ching-Fan Sheu, Emeline Perthame, Flavia Rufini, A Functional Generalized F-Test for Signal Detection with Applications to Event-Related Potentials Significance Analysis, Biometrics, Volume 76, Issue 1, March 2020, Pages 246–256, https://doi.org/10.1111/biom.13118
+
+
+
+## How to gain accuracy ?
+
+
+An example of significantly different curves:
+
+
+
+
+```{r setup}
+# file.copy("../../../R_projects_research/localFaov/R/simulations/functions_simulations.R", "functions_simulations.R")
+# file.copy("../../../R_projects_research/localFaov/R/simulations/run_simulations_server.R", "run_simulations_server.R")
+# file.copy("../../../R_projects_research/localFaov/R/my_faov.R", "my_faov.R")
+# file.copy("../../../R_projects_research/localFaov/R/my_local_faov.R", "my_local_faov.R")
+
+source("functions_simulations.R")
+source("my_faov.R")
+
+
+library(dplyr)
+library(purrr)
+library(stringr)
+library(tidyr)
+library(MASS)
+library(ggplot2)
+
+```
+
+
+
+![](images/plot_faov.png){fig-align="center" height="400"}
+
+. . .
+
+* We conclude in a difference between mean curves for each conditions...
+
+* But another question arises: where does this difference come from ?
+
+* Need to find a more accurate approach to conclude
+
+
+
+## Another point of view: multiple comparison procedure
+
+::: {.incremental}
+1. Compute pointwise F-Statistics ($F_t$)
+2. Compute p-values and apply a correction (Bonferonni / Benjamini Hochberg for instance)
+:::
+
+:::: columns
+
+
+::: {.column width="50%"}
+
+![](images/plot_dataset_compare_pval.png){.fragment height="250" fig-align="center"}
+
+:::
+
+::: {.column width="50%"}
+
+![](images/plot_pval.png){.fragment height="250" fig-align="center"}
+
+:::
+::::
+
+
+::: {.fragment}
+
+* Some problems with these approaches:
+  1. May be too conservative
+  2. May be tricked by spurious time points with higher differences
+  3. Functional nature of the signal (ex. time dependance) not taken into account
+
+
+
+:::
+
+
+
+# Local FANOVA {visibility="uncounted"}
+
+
+## A compromise between multiple testing procedures and fANOVA
+
+* *Idea*: for a given set of curves, find the largest intervals at which no significant effect can be detected with the functional ANOVA test 
+
+
+. . .
+
+__In a nutshell__
+
+* Screen the whole time frame partitionned into a given number of intervals, and incrementally find the largest union of intervals not significant.
+
+__Inputs:__
+
+
+* k = window size
+* m = number of intervals to consider
+
+
+<!-- ## Local FANOVA: How it works {transition="none";visibility="uncounted"} -->
+## Local FANOVA: How it works {transition="none"}
+
+::::::: columns
+::: {.column width="50%"}
+
+1. For each interval i in 1 to m:
+  + Define a time frame centered on interval i with a window size k
+  + Perform a fANOVA on these time frames
+
+:::
+
+::::: {.column width="50%"}
+:::: fragment
+<!-- ![](images/time_frame_screening_with_pval.png){height="500" fig-align="center"} -->
+![](images/time_frame_screening.png){height="500" fig-align="center"}
+
+::::
+:::::
+:::::::
+
+<!-- ## Local FANOVA: How it works {transition="none"} -->
+## Local FANOVA: How it works {.unnumbered visibility="uncounted" transition="none"}
+
+:::::: columns
+::: {.column width="50%"}
+
+1. For each interval i in 1 to m:
+  + Define a time frame centered on interval i with a window size k
+  + Perform a fANOVA on these time frames
+
+2. Remove all intervals from the time frame that are significant.
+ 
+:::
+
+:::: {.column width="50%"}
+![](images/plot1.png){height="500" fig-align="center"}
+
+::::
+::::::
+
+<!-- ## Local FANOVA: How it works {transition="none"} -->
+## Local FANOVA: How it works {.unnumbered visibility="uncounted" transition="none"}
+
+:::::: columns
+::: {.column width="50%"}
+
+1. For each interval i in 1 to m:
+  + Define a time frame centered on interval i with a window size k
+  + Perform a fANOVA on these time frames
+
+2. Remove all intervals from the time frame that are significant.
+
+3. While the Fanova on the remaining whole time frame is not significant:
+  + Incrementally add intervals to the time frame (decreasing p-values)
+  + Perform a fANOVA on this time frame
+
+:::
+
+:::: {.column width="50%"}
+![](images/plot_step1.png){height="500" fig-align="center"}
+
+::::
+::::::
+
+
+<!-- ## Local FANOVA: How it works {transition="none"} -->
+## Local FANOVA: How it works {.unnumbered visibility="uncounted" transition="none"}
+
+:::::: columns
+::: {.column width="50%"}
+
+1. For each interval i in 1 to m:
+  + Define a time frame centered on interval i with a window size k
+  + Perform a fANOVA on these time frames
+
+2. Remove all intervals from the time frame that are significant.
+
+3. While the Fanova on the remaining whole time frame is not significant:
+  + Incrementally add intervals to the time frame (decreasing p-values)
+  + Perform a fANOVA on this time frame
+
+:::
+
+:::: {.column width="50%"}
+![](images/plot_step2.png){height="500" fig-align="center"}
+
+::::
+::::::
+
+<!-- ## Local FANOVA: How it works {transition="none"} -->
+## Local FANOVA: How it works {.unnumbered visibility="uncounted" transition="none"}
+
+:::::: columns
+::: {.column width="50%"}
+
+1. For each interval i in 1 to m:
+  + Define a time frame centered on interval i with a window size k
+  + Perform a fANOVA on these time frames
+
+2. Remove all intervals from the time frame that are significant.
+
+3. While the Fanova on the remaining whole time frame is not significant:
+  + Incrementally add intervals to the time frame (decreasing p-values)
+  + Perform a fANOVA on this time frame
+
+:::
+
+:::: {.column width="50%"}
+![](images/plot_step3.png){height="500" fig-align="center"}
+
+::::
+::::::
+
+<!-- ## Local FANOVA: How it works {transition="none"} -->
+## Local FANOVA: How it works {.unnumbered visibility="uncounted" transition="none"}
+
+:::::: columns
+::: {.column width="50%"}
+
+1. For each interval i in 1 to m:
+  + Define a time frame centered on interval i with a window size k
+  + Perform a fANOVA on these time frames
+
+2. Remove all intervals from the time frame that are significant.
+
+3. While the Fanova on the remaining whole time frame is not significant:
+  + Incrementally add intervals to the time frame (decreasing p-values)
+  + Perform a fANOVA on this time frame
+
+:::
+
+:::: {.column width="50%"}
+![](images/plot_step6.png){height="500" fig-align="center"}
+
+::::
+::::::
+
+
+
+<!-- ## Local FANOVA: How it works {transition="none"} -->
+## Local FANOVA: How it works {.unnumbered visibility="uncounted" transition="none"}
+
+:::::: columns
+::: {.column width="50%"}
+
+1. For each interval i in 1 to m:
+  + Define a time frame centered on interval i with a window size k
+  + Perform a fANOVA on these time frames
+
+2. Remove all intervals from the time frame that are significant.
+
+3. While the Fanova on the remaining whole time frame is not significant:
+  + Incrementally add intervals to the time frame (decreasing p-values)
+  + Perform a fANOVA on this time frame
+
+:::
+
+:::: {.column width="50%"}
+![](images/plot_result.png){height="500" fig-align="center"}
+
+::::
+::::::
+
+
+
+# Simulations {visibility="uncounted"}
+
+## Datasets generated
+
+
+Underlying observations generated by the model: $$Y_{ij} =  z_i^T \beta_j + \varepsilon_{ij}$$ 
+
+with:
+
+* $Y_{ij}$ observation of curve $i$ at time $t_j$, with $i = 1, ...,n$ and $j = 1, ...,T$
+* $\beta_j = \beta_i(t_j)$
+* $\varepsilon_{ij} = \varepsilon_i(t_j)$
+* $\cal{T} = [0,1]$
+
+
+. . .
+
+__Parameters__:
+
+
+* Temporal resolution $T \in \{50,500,2000\}$ 
+* Number of individuals $n \in \{100,1000\}$ 
+* Temporal dependancy of the residuals $\varepsilon(t) \sim AR(1), \ \rho \in \{0,0.3,0.8\}$
+
+. . .
+
+
+* 100 datasets for each parameter combination
+
+```{r, eval = FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(gridExtra)
+
+# Fonction pour générer une série AR(p)
+
+# Paramètres de la simulation
+T_vals <- c(50, 500, 2000)
+n_vals <- c(100, 1000, 5000)
+p_vals <- c(0, 0.3, 0.8)
+
+# Génération des données
+sim_data <- expand.grid(T = T_vals, n = n_vals, p = p_vals) %>%
+  mutate(data = pmap(list(T, p, n), simulate_ar)) %>%
+  unnest(cols = data)
+
+# Création du plan de simulation (sans simulation des séries)
+sim_plan <- expand.grid(T = c(50, 500, 2000), 
+                        n = c(100, 1000, 5000), 
+                        p = c(0, 0.3, 0.8))
+
+ggplot(sim_plan, aes(x = factor(T), y = factor(n), color = factor(p))) +
+  geom_point(size = 5) +
+  scale_color_manual(values = c("blue", "red", "green"), 
+                     name = "Dépendance AR(p)",
+                     labels = c("p=0", "p=0.3", "p=0.8")) +
+  theme_minimal() +
+  labs(title = "Plan de simulation", 
+       x = "Résolution temporelle (T)", 
+       y = "Nombre d'individus (n)") +
+  theme(legend.position = "top")
+
+
+```
+
+<!-- [^1]: Thx Pierre Navaro for the help with the server -->
+
+
+## Values of $\beta(t)$
+
+
+
+$$
+\beta(t) =
+\begin{cases} 
+\mathcal{GP}(m(t), K(t,t')) & \text{if } t \in ]0.3 ; 0.4] \ \cup  \  ]0.7 ; 1] \\
+0 & \text{else} 
+\end{cases}
+$$
+
+
+with covariance function $K(t,t') = 0.1*e^{-0.3  |t - t'|}$ and
+
+$$ m(t) = \mathbb{1}_{t \in ]0.3, 0.4] } +0.5 \times \mathbb{1}_{t \in ]0.7, 1] }$$
+
+. . .
+
+
+:::: columns
+
+
+::: {.column width="50%"}
+
+![](images/plot_kernel.png){.fragment height="350" fig-align="center"}
+
+:::
+
+::: {.column width="50%"}
+
+![](images/plot_beta.png){.fragment height="350" fig-align="center"}
+
+:::
+::::
+
+
+
+<!-- A representation of $\beta_1(t)$: -->
+
+
+
+## Alternatives methods compared
+
+
+:::: columns
+
+
+::: {.column width="33%"}
+
+
+__Lasso regression (Tibshirani):__
+
+
+::: {style="font-size: 75%;"}
+
+ $\hat{\beta} =  \underset{\beta}{\text{argmin}}(\sum_1^n (y_i - \sum_1^p\beta_j x_{ij})^2 + \lambda \sum_1^p |\beta_k|)$
+
+:::
+
+![](images/lasso_reg.png){height="250" fig-align="center"}
+
+
+:::
+
+
+
+::: {.column width="28%"}
+
+__Multiple testing procedure (BH correction)__
+
+![](images/plot_pval.png){.fragment height="250" fig-align="center"}
+
+:::
+
+
+::: {.column width="39%"}
+
+__Interval wise testing procedure (Pini et al. 2018[^4])__
+
+
+
+![](images/pini_et_al.png){.fragment height="250" fig-align="center"}
+
+:::
+
+
+
+::::
+
+[^4]: Pini, A., & Vantini, S. (2017). Interval-wise testing for functional data. Journal of Nonparametric Statistics, 29(2), 407–424. https://doi.org/10.1080/10485252.2017.1306627
+
+
+## Simulation results
+
+
+
+*The moment that every statistician waits for / fears*
+
+
+
+::: {.r-stack}
+
+<!-- ![](images/mi_figue.jpg){fig-align="center" .fragment} -->
+
+![](images/plot_results_sim_zoom.png){fig-align="center" .fragment}
+
+![](images/plot_results_sim.png){fig-align="center" .fragment}
+
+:::
+
+
+# Real world data {visibility="uncounted"}
+
+## Context
+
+* Fusarium head blight: Fungal disease $\Rightarrow$ lot of damages (yield / food safety / added value)
+
+* Mycotoxins emitted by Fusarium (ex. Nivalénol (NIV))
+
+
+::: columns
+
+::: {.column width="50%"}
+
+![](images/wheat_fusa.jpg){height="300" fig-align="center"}
+:::
+
+::: {.column width="50%"}
+
+![](images/grain_fusa.jpg){height="300" fig-align="center"}
+
+:::
+
+
+:::
+
+* How is the overtaking of a given toxin related to a given climate variable ?
+
+## Dataset (Arvalis)
+
+
+* $\approx 1500$ farms: climate timeseries and toxins concentrations
+* Different agronomic practices
+* __Binarization of the concentrations__: above/below of a legal threshold
+
+
+. . .
+
+__Example with 320 farms sharing the same agronomic practices__
+
+::: columns
+
+::: {.column width="50%"}
+
+![](images/plot_sample.png){height="300" fig-align="center"}
+
+:::
+
+::: {.column width="50%"}
+
+![](images/plot_P_ETP_NIV.png){height="300" fig-align="center"}
+
+:::
+
+
+:::
+
+
+## Application
+
+
+
+
+Application of local fANOVA in our case:
+
+$Y$ is a time serie of a climate variable (ex. water excess) and $x_1 = \mathbb{1}_{\text{NIV > legal threshold}}$
+
+
+
+. . .
+
+![](images/plot_mean_example_intervals.png){height="300" fig-align="center"}
+
+
+
+
+# Discussion and perspectives
+
+
+## On-going thoughts on the choice of hyperparameters
+
+
+* In our case, two key parameters:
+  + k = window size
+  + m = number of intervals to consider
+
+\
+
+:::: columns
+
+
+::: {.column width="33%"}
+
+
+
+![](images/time_frame_screening_big_trimmed.png){height="250" fig-align="center"}
+
+
+:::
+
+
+::: {.column width="34%"}
+
+![](images/time_frame_screening10_50.png){height="250" fig-align="center"}
+
+
+:::
+
+
+::: {.column width="33%"}
+
+
+![](images/time_frame_screening4_20.png){height="250" fig-align="center"}
+
+:::
+
+::::
+
+
+
+
+  
+
+
+. . .
+
+* Choice of hyperparameters, different points of view:
+  + statistical: find the best combination of hyperparameters that optimize a given metric
+  + practical: find the best compromise between "good results" and acceptable computational costs
+  + field-related: when possible, set hyperparameters that have a mean
+
+
+
+
+## Perspectives and conclusion
+
+
+Development version available on [Github/RemiMahmoud/TrustMe](https://github.com/RemiMahmoud)
+
+```{r, echo = TRUE, eval = FALSE}
+devtools::install_github("RemiMahmoud/localFaov")
+```
+
+
+
+
+\
+
+
+
+::: {.incremental .incremental_space}
+
+*This is an ongoing work*
+
+
+* Promising but contrasting simulation results
+
+* Convincing application on some real world cases
+
+* Some issues still need to be fixed (choice of hyperparameters, situations of bad results etc.).
+
+
+:::
+
+
+## Functional data {visibility="uncounted"}
+
+
+::: {.incremental .incremental_space}
+
+* Observations represented by curves or functions
+
+
+* Old but new: original studies by Grenander & Rao (1948 / 1952 resp) but huge works from Ramsay and Silverman 2005[^1]
+
+
+* Similarly to NN, has arosen in the last years because of higher data availability and computing abilities
+
+
+:::
+
+
+::: {.fragment}
+
+
+* Challenges:
+  + temporal dependency
+  + specific questions (adaptation of classical methods to FD etc.)
+
+:::
+
+
+[^1]: Ramsay, J.O. and Silverman, B.W. (2005). *Functional Data Analysis*. Springer. 
+
+
+
+## Metrics: how good / bad are the results {visibility="uncounted"}
+
+
+__Recall of the goal (in our case):__
+
+
+* Detect curve segments responsible for a significant difference between modalities
+* Need for a metric designed for this goal
+
+. . .
+
+* Let $(I_i)_{i = 1,\cdots,m}$ the collection of intervals linked to this difference
+
+* (*Reminder*) In our simulation study, $m = 2, \ I_1 = ]0.3,0.4] \text{ and } I_2 = ]0.7,1]$ 
+
+
+. . .
+
+__Metrics used__
+
+
+* Mean Overlap: $\text{Mean Overlap} = \frac{1}{m} \sum_{i=1}^{m} \frac{\text{# points selected in } I_i}{|I_i|}$
+
+
+* $\text{Sensitivity} = \frac{\text{TP}}{\text{TP + FN}}$
+
+
+* $F1 = \frac{2 \times \text{Mean Overlap} \times \text{Sensitivity}}{\text{Mean Overlap} + \text{Sensitivity}}$
+
+* Other metrics exist (mean distance to closest interval, FDR etc.)
+
+
+
+
+
+
+## What we want to test {visibility="uncounted"}
+
+* Is the mean function the same for each group ?
+
+. . .
+
+
+
+* Pointwise null hypothesis: $H_{0t}: \beta(t) = 0, \  \forall t \in \cal T$
+
+
+* Global null hypothesis: $H_0 = \{H_{0t}, \  t \in \cal T \}$
+
+
+. . .
+
+
+__A common approach:__
+
+
+<!-- 1. Compute pointwise F-Statistics ($F_t$, Ramsay and Silverman 2005) -->
+<!-- 2. Aggregate the F-Statistics ($F_t$) -->
+  
+  
+  
+<!-- 3. Distribution of F under $H_0$ known or derived by permutation -->
+
+
+1. Compute pointwise F-Statistics ($F_t$, Ramsay and Silverman 2005)  
+2. Aggregate the F-Statistics ($F_t$)  
+    - $\int$ (Zhang and Liang 2014[^2])  
+    - $F_{\max} = \sup_{t\in \mathcal{T}} \mathcal{F}(t)$ (Zhang et al. 2019[^3])  
+3. Distribution of F under $H_0$ known or derived by permutation
+
+. . .
+
+But generally time dependance not taken into account (Shen et al. 2016) $\Rightarrow$ Increase risk of type-I error !
+
+
+[^2]: Zhang, J. T., & Liang, X. (2014). One‐way ANOVA for functional data via globalizing the pointwise F‐test. Scandinavian Journal of Statistics, 41(1), 51-71.
+[^3]: Zhang, J. T., Cheng, M. Y., Wu, H. T., & Zhou, B. (2019). A new test for functional one-way ANOVA with applications to ischemic heart screening. Computational Statistics & Data Analysis, 132, 3-17.
+
+
+
+
+
+
+
+
+```{=html}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Obtenir toutes les sections avec un H1, en excluant le premier H1 (le titre de la présentation)
+    const h1Elements = Array.from(document.querySelectorAll('h1')).slice(1); // On exclut le premier H1
+    const sectionTitles = h1Elements.map(h1 => h1.textContent);
+    
+    // Créer des éléments de titre pour chaque section (H1 uniquement, sauf le premier)
+    const titleContainer = document.createElement('div');
+    titleContainer.classList.add('title-container');
+    sectionTitles.forEach((title, index) => {
+      const titleElement = document.createElement('span');
+      titleElement.classList.add('section-title');
+      titleElement.textContent = title;
+      titleElement.setAttribute('data-section-index', index);
+      
+      // Rendre chaque titre cliquable pour naviguer vers la section correspondante
+      titleElement.style.cursor = 'pointer'; // Ajouter le style du curseur pour indiquer que c'est cliquable
+    titleElement.addEventListener('click', () => {
+      // Récupérer la diapositive correspondant au H1 sélectionné
+      const targetSlide = h1Elements[index].closest('section');
+      const indices = Reveal.getIndices(targetSlide); // Obtenir les indices de la section (index horizontal et vertical)
+      Reveal.slide(indices.h, indices.v); // Naviguer vers la section correspondante
+    });
+
+    titleContainer.appendChild(titleElement);
+  });
+
+  document.body.insertBefore(titleContainer, document.body.firstChild); // Affiche les titres en haut de la page
+
+  function updateSectionTitles() {
+    const currentSlide = Reveal.getCurrentSlide();
+
+    // Vérifier si la diapositive actuelle contient un H1, en excluant le premier
+    let currentSectionIndex = -1;
+    h1Elements.forEach((h1, index) => {
+      if (currentSlide.contains(h1)) {
+        currentSectionIndex = index;
+      }
+    });
+
+    if (currentSectionIndex === -1) {
+      return; // Ne rien faire si aucun H1 n'est trouvé dans la diapositive courante
+    }
+    
+    // Mise à jour du style des titres selon la section courante
+    const titleElements = document.querySelectorAll('.section-title');
+    titleElements.forEach((titleElement, index) => {
+      if (index === currentSectionIndex) {
+        titleElement.style.color = 'black'; // Section active
+        titleElement.style.opacity = 1;
+      } else {
+        titleElement.style.color = 'grey'; // Autres sections
+        titleElement.style.opacity = 0.5;
+      }
+    });
+  }
+  
+  Reveal.on('slidechanged', updateSectionTitles);
+  updateSectionTitles(); // Initialisation au chargement
+  });
+    
+</script>
+```
+
+
+

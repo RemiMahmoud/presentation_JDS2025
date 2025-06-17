@@ -1,0 +1,756 @@
+---
+title: "Figures prez"
+format: pdf
+---
+
+```{r setup, cache =TRUE}
+
+
+
+source("functions_simulations.R")
+source("my_faov.R")
+source("my_local_faov.R")
+
+
+library(dplyr)
+library(purrr)
+library(stringr)
+library(tidyr)
+library(MASS)
+library(ggplot2)
+theme_set(theme_bw())
+```
+
+
+
+
+## Intro
+
+
+
+
+```{r}
+
+require(Fanova)
+data(impulsivity, package="Fanova")
+
+covariates <- impulsivity[,1:4]
+
+time_pt <- seq(-200, 1000, 2)
+
+erpdta <- impulsivity[, 5+(1:601)]          
+   # erpdta contains the ERP curves
+erpdta <- erpdta[, time_pt >= 0]  
+   # only the ERP values after the onset are analyzed
+time_pt <- time_pt[time_pt >=0] 
+   # the sequence of time points covers [0, 1000 ms]
+T <- length(time_pt)           
+select <- (covariates$Channel=="CP3")&(covariates$Group=="High") 
+erpdta_ch <- erpdta[select,]
+covariates_ch <- covariates[select,]
+covariates_ch <- droplevels(covariates_ch)
+# failure_h <- colMeans(erpdta_ch[covariates_ch$Condition=="Failure",])
+# success_h <- colMeans(erpdta_ch[covariates_ch$Condition=="Success",])
+# matplot(time_pt, cbind(success_h, failure_h),
+#      type = "l", 
+#      bty = 'n',
+#      col=c("steelblue", "firebrick"),
+#      xlab = "Time (ms)",
+#      lty = c(1,1),
+#      ylab = "Amplitude (in micro-volt)",
+#      main = "Mean ERP curves for high trait group \n in two conditions at CP3",
+#      ylim = c(-10, 15))
+# grid()
+# matlines(time_pt, t(erpdta_ch[covariates_ch$Condition=="Failure",]),
+#      lty=1, lwd=0.8, col="lightpink")
+# matlines(time_pt, t(erpdta_ch[covariates_ch$Condition=="Success",]),
+#      lty=1,lwd=0.8, col="lightblue")
+# matlines(time_pt, cbind(success_h,failure_h),
+#      type = "l", 
+#      lty=1,
+#      col=c("steelblue", "firebrick"))
+# legend("topright",
+#        bty="n",
+#        lty=1,
+#        col=c("steelblue", "firebrick"),
+#        legend=c("Success", "Failure"))
+# #mtext("Channel CP3, group High")
+# 
+# 
+erpdta_ch
+
+
+plot_ERP = erpdta_ch %>% mutate(condition = covariates_ch$Condition, id = 1:n()) %>%
+  pivot_longer(starts_with("T_"), names_to = "time") %>% 
+  mutate(time = as.numeric(str_remove(time, "T_"))) %>% 
+  ggplot(aes(x = time, y= value)) + 
+  geom_line(aes(group = as.character(id), color = condition)) + 
+  theme(legend.position = "bottom", text = element_text(size =16)) + 
+  labs(y = "Amplitude (in micro-volt)", x = "Time (ms)", "Mean ERP curves for high trait group \n in two conditions") +
+  scale_color_manual(values = c("Failure" = "lightpink2", "Success" =  "lightblue4")) 
+
+
+
+ggsave("images/plot_ERP.png", plot = plot_ERP,  height = 14, width = 26, unit = "cm", dpi ="retina")
+ggsave("images/plot_ERP_with_smooth.png", plot = plot_ERP+
+  geom_smooth(aes(group = condition, color = condition)) + theme(text = element_text(size =19)),  height = 14, width = 26, unit = "cm", dpi ="retina")
+```
+
+
+
+
+
+## Faov
+
+
+
+
+
+```{r plot example1}
+
+beta_group = function_beta_group(50,2,"low", beta_uncorrelated = TRUE,beta_structure = "gaussian_process")
+
+
+n = 100
+
+dataset = simulate_dataset(50,n, beta_group, mu = 0, sd = 0.3, vec_condition =  sample(LETTERS[1:2], size = n, replace = TRUE),temporal_dependance = TRUE, rho_ar = .3 )
+
+theme_set(theme_bw())
+
+
+mod.faov <- my_Faov(dataset[, -c(1,2)],
+                    design =  model.matrix(~ factor(dataset$condition)),
+                    nbf = 0:2,pvalue = "Satterthwaite")
+
+pval <- mod.faov$pval.Fgls
+Fgls <- mod.faov$Fgls
+label_plot1 <- "$F = 3.78$"
+label_plot2 <- "$p \\approx 0$"
+
+
+(plot_faov <- function_plot_dataset(dataset = dataset, prop_sample = .5, alpha_plot = .2) + 
+  theme(legend.position = "bottom", text = element_text(size = 15)) + 
+  annotate("text", x=  48, y = 3.5, label = latex2exp::TeX(c( label_plot1 )), vjust = -0.5, size = 5) +
+  annotate("text", x=  48, y = 3.5, label = latex2exp::TeX(c( label_plot2 )), vjust = 1, size = 5) +
+    geom_smooth()
+)
+ggsave("images/plot_faov.png", plot = plot_faov,  height = 14, width = 26, unit = "cm", dpi ="retina")
+
+
+(plot_dataset <- function_plot_dataset(dataset = dataset, prop_sample = .5, alpha_plot = .2) + 
+  theme(legend.position = "bottom", text = element_text(size = 20)) + 
+    geom_smooth()
+)
+
+ggsave("images/plot_dataset.png", plot = plot_dataset,  height = 14, width = 26, unit = "cm", dpi ="retina", scale = 1)
+
+
+```
+
+
+
+
+## Pval
+
+
+
+
+
+```{r}
+
+pval_example <- dataset %>%
+  pivot_longer(starts_with("T"), names_to = "time") %>% 
+  # nest(.by = c(time)) %>% 
+  summarise(pval =t.test(value ~ condition)$p.value,
+            Fstat = summary(aov(value ~ condition))[[1]]$"F value"[1],
+            # df1 = summary(aov(log_value ~ toxin_sup_thresh))[[1]]$"Df"[1],
+            .by = c(time)) %>% 
+  mutate(pval_bh= p.adjust(pval, method ="BH"),
+         pval_bonf = p.adjust(pval, method ="bonferroni")) 
+
+
+# p.adjust(pval_example$pval, method = "BH") %>% min
+# p.adjust(pval_example$pval_log, method = "BH") %>% min
+
+# data_pval %>% filter(all_itk == itk_example,
+#          climate_variable == climate_example, 
+#          name_toxin == toxin_example)
+
+
+
+(plot_dataset <- function_plot_dataset(dataset = dataset, prop_sample = 1, alpha_plot = .2) + 
+  theme(legend.position = "bottom", text = element_text(size = 15)) 
+)
+ggsave("images/plot_dataset.png", plot = plot_dataset,  height = 10, width = 13, unit = "cm", dpi ="retina")
+
+
+
+(plot_pval <- pval_example %>% 
+  mutate(rank_pval = rank(pval)) %>% 
+  ggplot(aes(x = rank_pval,y = pval)) +
+  geom_point(alpha= .6) + 
+  geom_abline(slope = 0.05/nrow(pval_example), color = "#8DA0CB", linewidth = 2, alpha=  .5) + 
+  geom_hline(yintercept = .05, color = "#66C2A5", linewidth = 2, alpha=  .5) +
+  geom_hline(yintercept = .05/nrow(pval_example), color = "#FC8D62", linewidth = 2, alpha=  .5) +
+  ylim(c(0,0.2)) +
+  xlim(c(0,20)) +
+  # geom_segment(x= 28, y= 0.010, xend = 30, yend =  .05/nrow(pval_example), arrow = arrow(type = "open"), , color = "#FC8D62") +
+  geom_label(x= 26, y= 0.006, alpha= .4, label = "Bonferonni" , color = "#FC8D62") +
+  geom_label(x= 5, y= 0.055, alpha= .4, label = "5% threshold" , color = "#66C2A5") +
+  geom_label(x= 24, y= 0.026, alpha= .4, label = "Benjamini-Hochberg" , color = "#8DA0CB") +
+  labs(x = "Rank pvalue")
+)
+
+(plot_pval <- pval_example %>% 
+  pivot_longer(contains("pval"), names_to = "correction", values_to = "pval") %>%
+  mutate(correction = case_when(correction == "pval_bh" ~ "BH",
+                                correction == "pval_bonf" ~ "Bonferroni",
+                                correction == "pval" ~ "No correction")) %>% 
+  ggplot(aes(x =  as.numeric(str_remove(time, "T")), y = -log(pval,10), color =correction, group = correction)) +
+  geom_line(linewidth = 1.5) +
+  geom_hline(yintercept =  -log(.05,10)) +
+  labs(x = "Time", y= latex2exp::TeX("$-log_{10}(p)$")) +
+    theme(legend.position = "bottom", text = element_text(size = 15))
+)
+
+ggsave("images/plot_pval.png", plot = plot_pval,  height = 10, width = 13, unit = "cm", dpi ="retina")
+# ggsave("images/plot_pval.png", plot = plot_pval,  height = 10, width = 13, unit = "cm", dpi ="retina")
+
+
+```
+
+
+
+
+
+## Local Faov
+
+
+### Screening timeframe
+
+
+
+
+
+```{r}
+
+
+plot_succesive_intervals <- function(dataset, window_size, number_intervals, shift_start_end_interval = TRUE, add_pvalues_intervals = FALSE){
+
+  # window_size = 50
+  T = ncol(dataset) - 2 
+  
+  data_fanova = dataset[,-c(1:2)]
+  if(shift_start_end_interval){interval_centers <- seq(from = 1 + 0.5*window_size, to = T - 0.5*window_size, length = number_intervals)}
+  else {
+    interval_centers <- seq(from = 1, to = T, length = number_intervals)
+  }
+  
+  # T = ncol(dataset)
+  
+  range_intervals <- data.frame(xmin = rep(0, number_intervals),
+                                xmax = rep(0, number_intervals), 
+                                ymin = rep(0, number_intervals),
+                                ymax = rep(0, number_intervals))
+  
+  
+  vec_p = rep(NA_real_, number_intervals)
+  
+  for (k in 1:number_intervals) {
+    
+    distances = abs((1:T) - interval_centers[k])
+    interval = sort(order(distances)[1:window_size])
+    range_intervals[k,c("xmin", "xmax")] = range(interval)
+    range_intervals[k,c("ymin", "ymax")] = 1.25 + k*(3 - 0)/number_intervals
+    
+    
+    if(add_pvalues_intervals){
+    # perform Functional ANOVA on this interval
+    F = my_Faov(data_fanova[, interval],design =  model.matrix(~ factor(dataset$condition)),
+                    nbf = 0:2,pvalue = "Satterthwaite")
+    vec_p[k] = F$pval_approx
+    print(paste(k, "th local fANOVA p-value calculated over ", number_intervals)) 
+
+    }
+  }
+  
+  
+  
+  plot_output = function_plot_dataset(dataset, prop_sample = 1, alpha_plot = .15) + 
+    geom_errorbarh(data = range_intervals, aes(xmin= xmin, xmax = xmax, y = ymin), inherit.aes = FALSE, alpha = .5, height = .05)
+  
+  if(add_pvalues_intervals){return(list(plot_output = plot_output, vec_p = vec_p))} else{
+  return(plot_output)}
+    
+}
+
+
+
+
+time_frame_screening <- plot_succesive_intervals(dataset, 5, 20) +
+  theme(text = element_text(size= 15), title = element_text(size = 13), legend.position = "bottom") +
+  labs(title = "Time frame screening: 20 intervals, window size = 5")
+
+ggsave("images/time_frame_screening.png", plot = time_frame_screening,  height = 14, width = 14, unit = "cm", dpi ="retina")
+
+ggsave("images/time_frame_screening_big.png", plot = time_frame_screening + theme(text = element_text(size = 10))+
+  labs(title = "20 intervals, window size = 5"),  height = 7, width = 9, unit = "cm", dpi ="retina")
+
+
+
+time_frame_screening10_50 <- plot_succesive_intervals(dataset, 10, 50) +
+  theme(text = element_text(size= 15), title = element_text(size = 13), legend.position = "bottom") +
+  labs(title = "Time frame screening: 50 intervals, window size = 10")
+
+
+time_frame_screening4_20 <- plot_succesive_intervals(dataset, 20, 4) +
+  theme(text = element_text(size= 15), title = element_text(size = 13), legend.position = "bottom") +
+  labs(title = "Time frame screening: 4 intervals, window size = 20")
+
+ggsave("images/time_frame_screening10_50.png", plot = time_frame_screening10_50,  height = 14, width = 14, unit = "cm", dpi ="retina")
+ggsave("images/time_frame_screening4_20.png", plot = time_frame_screening4_20,  height = 14, width = 14, unit = "cm", dpi ="retina")
+
+
+
+if(FALSE){res_plot = plot_succesive_intervals(dataset, 5, 20, add_pvalues_intervals = TRUE)}
+
+# res_plot$vec_p
+
+```
+
+
+
+
+### LocalFaov step by step
+
+__Remove all intervals from the time frame that are significant.__
+
+
+
+
+
+```{r local faov step by step, eval = FALSE}
+dta = dataset[,-c(1,2)]
+design = model.matrix(~ factor(dataset$condition))
+design0 = NULL
+edesign = NULL
+nbf = 0:1
+pvalue = c("none", "Satterthwaite", "MC")
+pvalue = c("Satterthwaite")
+nsamples = 200
+min.err = 0.01
+verbose = FALSE
+parallel = TRUE
+nbcores = NULL
+window_size = 5
+number_intervals = 20
+sig.level = 0.05
+
+
+# # function (dta, design, design0 = NULL, edesign = NULL, nbf = 0, 
+#           pvalue = c("none", "Satterthwaite", "MC"), nsamples = 200, 
+#           min.err = 0.01, verbose = FALSE, parallel = TRUE, nbcores = NULL, 
+#           window_size = round(ncol(dta)/10), number_intervals = round(ncol(dta)/5), 
+#           sig.level = 0.05) 
+# {
+design0 = matrix(1, nrow = nrow(dta), ncol = 1)
+erpdta = as.matrix(dta)
+design = as.matrix(design)
+design0 = as.matrix(design0)
+pvalue = match.arg(pvalue, choices = c("none", "Satterthwaite", 
+                                         "MC"))
+idsignal = NULL
+for (j in 1:ncol(design)) {
+  cj = apply(design0, 2, function(x, y) all(x == y), y = design[, 
+                                                                j])
+  if (all(!cj)) 
+    idsignal = c(idsignal, j)
+}
+idsignalw0 = NULL
+idsignalw = NULL
+
+if (parallel & is.null(nbcores)) 
+  nbcores = parallel::detectCores() - 1
+nbcores = min(nbcores, parallel::detectCores() - 1)
+if (parallel) 
+  cl = parallel::makeCluster(getOption("cl.cores", nbcores))
+n = nrow(erpdta)
+T = ncol(erpdta)
+
+# Why do we start at 1 instead of 1+window_size ?
+# ex. seq(1 + 0.5*window_size, T - 0.5*window_size, length = number_intervals)
+interval_centers <- seq(from = 1, to = T, length = number_intervals)
+pvalues <- rep(NA, length(interval_centers))
+
+message()
+if (verbose) 
+  print("Starting local fANOVA signal identification")
+for (k in 1:number_intervals) {
+  
+  # Distances of each point to the centers of the intervals
+  distances = abs((1:T) - interval_centers[k])
+  
+  # l closest points to the center of the current interval
+  interval = sort(order(distances)[1:window_size])
+  
+  # perform Functional ANOVA on this interval
+  F = my_Faov(erpdta[, interval], design = design, design0 = design0, 
+           edesign = edesign, nbf = nbf, nsamples = nsamples, 
+           pvalue = "Satterthwaite", min.err = min.err, verbose = FALSE, 
+           parallel = parallel, nbcores = nbcores)
+  pvalues[k] = F$pval_approx
+  if (verbose & k %% 20 == 0) 
+    print(paste(k, "th local fANOVA p-value calculated over ", 
+                number_intervals, sep = ""))
+}
+if (min(pvalues) >= sig.level) {
+  significant <- integer(0)
+  pval_agg <- NULL # Modification code David
+  pval_out <- NULL
+  pval_in <- NULL
+}
+if (min(pvalues) <= sig.level) {
+  nb_sig <- sum(pvalues <= sig.level)
+  
+  
+  ord <- order(pvalues, decreasing = FALSE)
+  whole_interval <- integer(0)
+  stepwise_intervals <- as.list(rep(0, nb_sig))
+  j <- 0
+  for (k in ord[1:nb_sig]) {
+    j <- j + 1
+    distances = abs((1:T) - interval_centers[k])
+    
+    # take the points around the center of the interval
+    # bandwith = window_size
+    interval = sort(order(distances)[1:window_size]) 
+    whole_interval <- union(whole_interval, interval)
+    stepwise_intervals[[j]] <- whole_interval
+  }
+  stepwise_intervals <- stepwise_intervals[nb_sig:1]
+  
+  # Ajout / modification Rémi: avoid the fact that if all intervals
+  # are significant, then pb with Faov (because of the removal of all the interval)
+  if(nb_sig < number_intervals){
+    
+    # Add Remi: drop = FALSE (avoid pb if only one column to select)
+    
+    # + avoid pb if nb factors dependance greater than actual nb of columns to consider    
+    
+    # pb here if legnth(stepwise_intervals[[1]]) == ncol(erpdta)
+    # + avoid pb if first interval is the wxhole time frame
+    first_interval = stepwise_intervals[[which(unlist(lapply(stepwise_intervals, length) )!= ncol(erpdta))[1]]]
+    nbf_reduced = nbf[which(nbf < ncol(erpdta[, -first_interval, drop = FALSE]))]
+    
+    # F = Faov(erpdta[, -stepwise_intervals[[1]], drop = FALSE], design = design, 
+    #        design0 = design0, edesign = edesign, nbf = nbf_reduced, 
+    #        nsamples = nsamples, pvalue = pvalue, min.err = min.err, 
+    #        verbose = FALSE, parallel = parallel, nbcores = nbcores)
+    
+    
+    # Perform Fanova on the whole timeframe minus the union of all significant intervals --> should be non significant !!
+    F = my_Faov(erpdta[, -first_interval, drop = FALSE], design = design, 
+           design0 = design0, edesign = edesign, nbf = nbf_reduced, 
+           nsamples = nsamples, pvalue = pvalue, min.err = min.err, 
+           verbose = FALSE, parallel = parallel, nbcores = nbcores)
+  # F = Faov(erpdta[, c(21:23), drop = FALSE], design = design, 
+  #          design0 = design0, edesign = edesign, nbf = nbf, 
+  #          nsamples = nsamples, pvalue = pvalue, min.err = min.err, 
+  #          verbose = FALSE, parallel = parallel, nbcores = nbcores)
+  } 
+  else {
+    F = my_Faov(erpdta, design = design, 
+             design0 = design0, edesign = edesign, nbf = nbf, 
+             nsamples = nsamples, pvalue = pvalue, min.err = min.err, 
+             verbose = FALSE, parallel = parallel, nbcores = nbcores)
+    first_interval = stepwise_intervals[[which(unlist(lapply(stepwise_intervals, length) )!= ncol(erpdta))[1]]]
+    nbf_reduced = nbf[which(nbf < ncol(erpdta[, -first_interval, drop = FALSE]))]
+    
+  }
+  
+  
+  pval_agg <- rep(NA, nb_sig)
+  pval_agg[1] <- F$pval
+  if (F$pval < sig.level) {
+    # significant <- stepwise_intervals[[1]]
+    
+    #aadd remi
+    significant <- first_interval
+    pval_out <- pval_agg[1]
+  }
+  
+  
+  # Perform Fanova on the whole timeframe minus some significant intervals, ranked by "significance level"
+  # I.e intervals at the border of sig.level (ex. p = 0.04) are added first
+  if (F$pval >= sig.level) {
+    crit <- TRUE
+    j <- 1
+    while (crit & (j <= (nb_sig - 1))) {
+    # while (crit & (j <= (nb_sig - 1))) {
+      j <- j + 1
+      interval <- stepwise_intervals[[j]]
+      
+      # Idea: keep enough points in the time frame considered ?
+      if ((T - length(interval)) >= 20) {
+        
+        
+        # + avoid pb if nb factors dependance greater than actual nb of columns to consider      
+        nbf_reduced = nbf[which(nbf < ncol(erpdta[, -interval, drop = FALSE]))]
+        F = my_Faov(erpdta[, -interval], design = design, 
+                 design0 = design0, edesign = edesign, nbf = nbf_reduced, 
+                 nsamples = nsamples, pvalue = pvalue, min.err = min.err, 
+                 verbose = FALSE, parallel = parallel, nbcores = nbcores)
+        pval_agg[j] <- F$pval
+      }
+      crit <- (F$pval >= sig.level)
+      if (crit & verbose) 
+        print(paste("Number of significant time points: ", 
+                    length(interval), sep = ""))
+    }
+    if(nb_sig == 1) {j = 2} # AJOT REMI
+    significant <- stepwise_intervals[[j - 1]]
+    pval_out <- pval_agg[j - 1]
+  }
+  # + avoid pb if nb factors dependance greater than actual nb of columns to consider  
+  F = my_Faov(erpdta[, significant], design = design, design0 = design0, 
+           edesign = edesign, nbf = nbf_reduced, nsamples = nsamples, 
+           pvalue = pvalue, min.err = min.err, verbose = FALSE, 
+           parallel = parallel, nbcores = nbcores)
+  pval_in <- F$pval
+}
+# return(list(interval_centers = interval_centers, pvalues = pvalues, 
+#             pvalues_agg = pval_agg, significant = significant, pval_out = pval_out, 
+#             pval_in = pval_in))
+# }
+
+
+saveRDS(object = stepwise_intervals, file = "stepwise_intervals.rds")
+saveRDS(object = pval_agg, file = "pval_agg.rds")
+```
+
+```{r}
+
+get_intervals <- function(v, base_diff_time_interval = 1) {
+  split_indices <- c(0, which(diff(v) != base_diff_time_interval), length(v))
+  intervals <- data.frame(start = v[split_indices[-length(split_indices)] + 1],
+                          end = v[split_indices[-1]])
+  return(intervals)
+}
+
+stepwise_intervals= readRDS("stepwise_intervals.rds")
+# vec_p = res_plot$vec_p
+
+# Remove all intervals from the time frame that are significant
+
+# first_interval = c(17L, 18L, 19L, 20L, 21L, 14L, 15L, 16L, 12L, 13L, 45L, 46L, 
+# 47L, 48L, 49L, 22L, 23L, 24L)
+first_interval = stepwise_intervals[[1]]
+
+
+plot_1 = function_plot_dataset(dataset, prop_sample = 1) + 
+  geom_rect(data = get_intervals(  sort(first_interval)),
+            aes(xmin = start, xmax = end, ymin =  -Inf, ymax = Inf),
+              fill = "sienna", inherit.aes = FALSE,
+              alpha=  .6) +
+  theme(legend.position = "bottom", text = element_text(size = 14)) +
+  labs(title = "Local Fanova: remove significant intervals")
+  
+  
+  
+ggsave("images/plot1.png", plot = plot_1,  height = 14, width = 14, unit = "cm", dpi ="retina")
+  
+
+
+
+```
+
+
+
+
+__While the Fanova on the remaining whole time frame is not significant.__
+
+<!-- a. Add more intervals to the time frame -->
+<!--        b. Perform a Fanova -->
+
+
+
+
+
+```{r}
+
+# stepwise_intervals <- readRDS("stepwise_intervals.rds")
+pval_agg = readRDS("pval_agg.rds")
+time_pt = 1:50
+for(i in 1:(which(is.na(pval_agg))[1] - 1)){
+  
+  
+  
+  
+  
+  plot_step =  function_plot_dataset(dataset, prop_sample = .5) + 
+  # geom_rug(data = tibble(time =time_pt[stepwise_intervals[[i]]], value = 0), sides= "b", aes(x=  time) ) +
+  geom_rect(data = get_intervals(time_pt[-stepwise_intervals[[i]]]),
+            aes(xmin = start, xmax = end, ymin =  -Inf, ymax = Inf),
+              fill = "lightgrey", inherit.aes = FALSE,
+              alpha=  .6)  +
+  ggtitle(label = paste0("Step ", i, ", p =", pval_agg[i])) +
+    theme(legend.position = "bottom", text = element_text(size = 15))
+
+ggsave(plot = plot_step, paste0( "images/plot_step", i,".png"), width = 14, height= 14, unit = "cm", scale=  1.1 )
+}
+
+
+
+i=  which(is.na(pval_agg))[1] - 1
+
+
+plot_result =  function_plot_dataset(dataset, prop_sample = .5) + 
+  geom_rect(data = get_intervals(sort(time_pt[stepwise_intervals[[i]]])),
+            aes(xmin = start, xmax = end, ymin =  -Inf, ymax = Inf),
+            fill = "sienna2", inherit.aes = FALSE,
+            alpha=  .5)  +
+  geom_rect(data = get_intervals(time_pt[-stepwise_intervals[[i]]]),
+            aes(xmin = start, xmax = end, ymin =  -Inf, ymax = Inf),
+            fill = "lightgrey", inherit.aes = FALSE,
+            alpha=  .4)  +
+  labs(title = "Time frames selected / excluded by the local Fanova") +
+  theme(legend.position = "bottom", text = element_text(size = 15), title = element_text(size = 13))
+ggsave(plot = plot_result,  "images/plot_result.png", width = 14, height= 14, unit = "cm", scale=  1.1 )
+
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+## Simulation study
+
+### Kernel function
+
+
+
+```{r}
+
+
+
+
+library(ggplot2)
+library(reshape2)
+
+# Définition du noyau de covariance
+kernel <- function(t, t_prime) {
+  0.1 * exp(-0.3 * abs(t - t_prime))
+}
+
+# Grille de points pour (t, t')
+t_vals <- seq(0, 1, length.out = 100)
+grid <- expand.grid(t = t_vals, t_prime = t_vals)
+grid$K <- mapply(kernel, grid$t, grid$t_prime)
+
+# Heatmap du noyau de covariance
+plot_kernel <- ggplot(grid, aes(x = t, y = t_prime, fill = K)) +
+  geom_tile() +
+  scale_fill_viridis_c(breaks = scales::breaks_pretty(n = 3)) + # Palette de couleurs adaptée
+  # theme_minimal() +
+  labs(title = latex2exp::TeX("Covariance function for $\\beta(t)$"),
+       x = "t",
+       y = "t'",
+       fill = "K(t, t')") + 
+  theme(legend.position = "bottom", text = element_text(size= 16))  
+
+
+
+ggsave("images/plot_kernel.png", plot = plot_kernel,  height = 14, width = 16, unit = "cm", dpi ="retina")
+
+
+
+```
+
+
+
+
+### $\beta(t)$
+
+
+
+
+```{r}
+
+theme_set(theme_bw())
+beta_group = function_beta_group(1000,2,"low", beta_uncorrelated = TRUE,beta_structure = "gaussian_process", mean_interval2 = .5)
+
+plot_beta = function_plot_beta_group(beta_group) +
+  geom_line() + 
+  labs(y = latex2exp::TeX("$\\beta(t)$"), title = latex2exp::TeX("Values of $\\beta(t)$")) +
+  theme(legend.position = "bottom", text = element_text(size= 16))
+
+
+ggsave("images/plot_beta.png", plot = plot_beta,  height = 14, width = 16, unit = "cm", dpi ="retina")
+
+```
+
+
+
+
+## Real world data
+
+
+
+
+```{r}
+
+
+data_NIV <- readRDS("data_NIV.rds")
+
+plot_sample <- data_NIV %>% 
+  ggplot(aes(x = toxin_sup_thresh)) + 
+  geom_bar(color = "sienna", fill = "sienna", alpha=  .4) +
+  scale_x_discrete(labels = c("TRUE" ="Yes", "FALSE" = "No")) + 
+  labs(x = 'NIV above threshold ?', y = "n", title = "Sample size of samples exceeding or not the NIV threshold") +
+  theme(legend.position = "bottom", text = element_text(size =15)) 
+
+plot_sample
+
+ggsave("images/plot_sample.png", plot = plot_sample,  height = 14, width = 16, unit = "cm", dpi ="retina")
+
+
+plot_P_ETP_NIV <- data_NIV%>% 
+  pivot_longer(-c(ID_ECH:climate_variable),names_to = "time", values_to = "value")%>%
+  mutate(time = as.numeric(str_remove(time, "T")))%>%
+  ggplot(aes(x = time, y= value )) +
+  geom_line(aes(group = ID_ECH, color = toxin_sup_thresh), linewidth = .8, alpha = .03)+ 
+  labs(y = "P - ETP (mm)",
+       x = "Time (° days before / after flowering)",
+       color = "NIV above threshold ?",
+       title = "Water excess against NIV overtaking") + 
+  theme(legend.position = "bottom", text= element_text(size= 16)) +
+  geom_smooth(aes(color = toxin_sup_thresh)) + 
+  scale_x_continuous(n.breaks=  8) +
+  scale_color_brewer(palette = "Dark2") 
+
+
+ggsave("images/plot_P_ETP_NIV.png", plot = plot_P_ETP_NIV,  height = 14, width = 20, unit = "cm", dpi ="retina")
+
+data_mean_climate_example %>%
+  ggplot(aes(x = time, y= value )) +
+  geom_line(aes(group = toxin_sup_thresh, color = toxin_sup_thresh), linewidth = 2)+ 
+    geom_rect(data = interval_example, aes(xmin = start, xmax = end, ymin =  -Inf, ymax = Inf),
+              fill = "lightgrey", inherit.aes = FALSE,
+              alpha=  .4) +
+  labs(y = "P - ETP (mm)",
+       x = "Time (° days before / after flowering)",
+       color = "Toxin sup threshold ?",
+       title = "Déficit hydrique selon dépassement du seuil ou non") + 
+  theme(legend.position = "bottom", text= element_text(size= 16)) +
+  scale_x_continuous(n.breaks=  8) +
+  scale_color_brewer(palette = "Dark2") 
+
+```
+
